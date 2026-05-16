@@ -16,12 +16,16 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    _model: TextEmbedding
+    _model: TextEmbedding | None
 
     def __init__(self):
         self._lock = threading.Lock()
+        self._model = None
 
-    def load_model(self):
+    def load_model(self) -> TextEmbedding:
+        if self._model is not None:
+            return self._model
+
         if not os.path.exists(MODEL_PATH):
             raise HTTPException(
                 503,
@@ -44,6 +48,11 @@ class EmbeddingService:
             model_config=model_config,
         )
         logger.info("Embedding model loaded in %.2fs", time.perf_counter() - start)
+        return self._model
+
+    def get_model(self) -> TextEmbedding:
+        with self._lock:
+            return self.load_model()
 
     def _normalize(self, embeddings: np.ndarray) -> np.ndarray:
         embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
@@ -51,8 +60,9 @@ class EmbeddingService:
         return embeddings
 
     def embed(self, text: str) -> np.ndarray:
+        model = self.get_model()
         with self._lock:
-            embedding = next(iter(self._model.encode([text])))
+            embedding = next(iter(model.encode([text])))
         embedding_np = np.array(list(embedding), dtype=np.float32)
 
         if embedding_np.ndim == 1:
@@ -64,8 +74,9 @@ class EmbeddingService:
         if not texts:
             return np.empty((0, settings.EMBEDDING_DIM), dtype=np.float32)
 
+        model = self.get_model()
         with self._lock:
-            embeddings = list(self._model.encode(texts))
+            embeddings = list(model.encode(texts))
         embeddings_np = np.array(embeddings, dtype=np.float32)
         if embeddings_np.ndim == 1:
             embeddings_np = embeddings_np.reshape(1, -1)

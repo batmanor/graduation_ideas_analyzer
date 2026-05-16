@@ -5,4 +5,4 @@ class Base(DeclarativeBase):
     pass
 
 
-from .paper import Paper as Paper  
+from .paper import Paper as Paper  # noqa: E402
