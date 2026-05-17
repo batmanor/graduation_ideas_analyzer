@@ -11,6 +11,7 @@ dependencies = [
     "google-genai>=1.73.1",
     "huggingface-hub>=0.34.6",
     "light-embed>=1.0.8",
+    "onnxruntime-tools>=1.7.0",
     "optimum[onnxruntime]>=2.1.0",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.13.1",
