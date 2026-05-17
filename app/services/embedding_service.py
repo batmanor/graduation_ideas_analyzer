@@ -5,7 +5,7 @@ from typing import Any
 import threading
 
 from faiss import normalize_L2  # pyright: ignore[reportMissingTypeStubs]
-from fastapi import HTTPException
+
 import numpy as np
 from light_embed import TextEmbedding  # pyright: ignore[reportMissingTypeStubs]
 
@@ -27,12 +27,11 @@ class EmbeddingService:
             return self._model
 
         if not os.path.exists(MODEL_PATH):
-            raise HTTPException(
-                503,
+            raise RuntimeError(
                 "Local embedding model folder not found. "
                 f"Expected: {settings.EMBEDDING_MODEL_PATH}. "
                 "Download the ONNX sentence-transformer model there or set "
-                "EMBEDDING_MODEL_PATH to its local folder.",
+                "EMBEDDING_MODEL_PATH to its local folder."
             )
 
         model_config: dict[str, Any] = {

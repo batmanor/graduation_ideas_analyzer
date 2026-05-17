@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
+import asyncio
 from fastapi import FastAPI
 
 from .api.v1.router import api_router
@@ -9,6 +10,7 @@ from .core.database import engine
 from .core.logging import configure_logging
 from .models import Base
 from .services.llm_service import GeminiLLMService
+from .utils.download_model import ensure_model
 
 
 configure_logging()
@@ -18,6 +20,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting application")
+
+    logger.info("Ensuring embedding model is present")
+    await asyncio.to_thread(ensure_model)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
