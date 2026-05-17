@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Iterable
 
@@ -28,7 +29,7 @@ class VectorStoreService:
         await self.index_store.persist()
 
     async def add_vector(self, external_id: int, text: str) -> None:
-        vector = self.embedding_service.embed(text)
+        vector = await asyncio.to_thread(self.embedding_service.embed, text)
 
         try:
             await self.index_store.add(external_id, vector)
@@ -38,7 +39,7 @@ class VectorStoreService:
             )
 
     async def search(self, text: str, top_k: int = 5) -> tuple[np.ndarray, np.ndarray]:
-        vector = self.embedding_service.embed(text)
+        vector = await asyncio.to_thread(self.embedding_service.embed, text)
         return await self.index_store.search(vector, top_k)
 
     async def get_contents(self) -> list[int]:
@@ -109,6 +110,6 @@ class VectorStoreService:
 
         texts = [paper.abstract for paper in paper_list]
         ids = [paper.external_id for paper in paper_list]
-        vectors = self.embedding_service.embed_batch(texts)
+        vectors = await asyncio.to_thread(self.embedding_service.embed_batch, texts)
 
         return ids, vectors

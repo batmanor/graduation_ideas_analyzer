@@ -28,6 +28,15 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
 
     app.state.container = AppContainer(llm_service=GeminiLLMService())
+
+    def prewarm_model():
+        try:
+            app.state.container.get_embedding_service().get_model()
+        except Exception as e:
+            logger.exception("Failed to prewarm embedding model: %s", e)
+
+    asyncio.create_task(asyncio.to_thread(prewarm_model))
+
     logger.info("Application startup complete")
 
     yield
