@@ -5,6 +5,7 @@ import asyncio
 from fastapi import FastAPI
 
 from .api.v1.router import api_router
+from .core.config import settings
 from .core.container import AppContainer
 from .core.database import engine
 from .core.logging import configure_logging
@@ -26,18 +27,24 @@ async def lifespan(app: FastAPI):
     app.state.container = AppContainer(llm_service=GeminiLLMService())
 
     def prewarm_model():
+        app.state.container.get_embedding_service().get_model()
+
+    if settings.PREWARM_EMBEDDING_MODEL:
         try:
-            app.state.container.get_embedding_service().get_model()
+            await asyncio.to_thread(prewarm_model)
+            logger.info("Embedding model prewarmed")
         except Exception as e:
             logger.exception("Failed to prewarm embedding model: %s", e)
-
-    asyncio.create_task(asyncio.to_thread(prewarm_model))
+            raise RuntimeError("Model initialization failed") from e
+    else:
+        logger.info("Embedding model prewarm disabled")
 
     logger.info("Application startup complete")
 
     yield
 
     logger.info("Shutting down application")
+
     try:
         await app.state.container.persist_vector_store_if_loaded()
         logger.info("FAISS index persisted if it was loaded")

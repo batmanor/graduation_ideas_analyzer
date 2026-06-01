@@ -35,7 +35,7 @@ Run tests:
 uv run pytest
 ```
 
-Note: embeddings are local. The app expects an ONNX export of `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` at `./models/paraphrase-multilingual-MiniLM-L12-v2` by default.
+Note: embeddings run locally through ONNX. If the model folder is missing, the app can download the configured model from Hugging Face unless Hugging Face offline flags are enabled.
 
 ## Features
 
@@ -203,15 +203,16 @@ For a final-project demo only, a simple token can contain signed JSON data with 
 
 ## Local Embedding Model
 
-The previous README note meant: the old code did not download the model at startup. It only worked if the model was already present on the machine. If the model was missing, startup failed before the API could run.
-
-The current setup keeps that important local-only behavior, but uses a smaller runtime stack:
+The app uses a local ONNX embedding model with a smaller runtime stack:
 
 - Model: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+- Default Hugging Face repo: `Mo-alhariri/paraphrase-multilingual-minilm-l12-v2-int8`
 - Runtime library: `light-embed`
 - Inference engine: `onnxruntime`
 - Default local folder: `./models/paraphrase-multilingual-MiniLM-L12-v2`
-- Default ONNX file inside that folder: `onnx/model_O4.onnx`
+- Default ONNX file inside that folder: `model.int8.onnx`
+
+The model is loaded lazily on the first endpoint that needs embeddings. If `PREWARM_EMBEDDING_MODEL=true`, startup loads the model immediately and fails fast if the model cannot be loaded.
 
 Expected local structure:
 
@@ -224,20 +225,21 @@ models/
     special_tokens_map.json
     1_Pooling/
       config.json
-    onnx/
-      model_O4.onnx
+    model.int8.onnx
 ```
 
 You can override the path and ONNX file in `.env`:
 
 ```env
+REPO_ID=Mo-alhariri/paraphrase-multilingual-minilm-l12-v2-int8
 EMBEDDING_MODEL_PATH=./models/paraphrase-multilingual-MiniLM-L12-v2
-EMBEDDING_ONNX_FILE=onnx/model_O4.onnx
+EMBEDDING_ONNX_FILE=model.int8.onnx
 EMBEDDING_POOLING_CONFIG_PATH=1_Pooling
 EMBEDDING_DIM=384
+PREWARM_EMBEDDING_MODEL=false
 ```
 
-This keeps the sentence-transformer local while removing the large PyTorch/SentenceTransformers dependency chain from the app install.
+Do not set `HF_HUB_OFFLINE=1` or `TRANSFORMERS_OFFLINE=1` unless the model files already exist at `EMBEDDING_MODEL_PATH`.
 
 ## Setup
 
@@ -255,11 +257,7 @@ GEMINI_MODEL=gemini-2.5-flash
 SIMILARITY_THRESHOLD=0.75
 ```
 
-The embedding model is loaded from `EMBEDDING_MODEL_PATH`, so the model folder must already exist on the machine. If it is missing, startup raises:
-
-```text
-Local embedding model folder not found.
-```
+The embedding model is loaded from `EMBEDDING_MODEL_PATH`. If the folder is missing and Hugging Face downloads are allowed, the app downloads the model automatically on first embedding use.
 
 ## Run
 
@@ -292,6 +290,13 @@ uv run ruff format .
 
 ## Deployment Notes
 
+For Railway, choose one model strategy:
+
+- Allow the app to download from Hugging Face: do not set `HF_HUB_OFFLINE=1` or `TRANSFORMERS_OFFLINE=1`.
+- Bundle/provision the model files at `EMBEDDING_MODEL_PATH`: then offline flags are safe.
+
+`PREWARM_EMBEDDING_MODEL=false` is the default and lets the API boot before loading the embedding model. Set it to `true` only when the model is already present or Railway can reach Hugging Face during startup.
+
 Previous local size observations from this project environment before the ONNX runtime change:
 
 - `.venv`: about `0.86 GB`
@@ -316,7 +321,7 @@ Do not deploy local secrets or artifacts:
 Set `GEMINI_API_KEY` in `.env` or in the deployment environment.
 
 Embedding model startup error:
-Place the local ONNX model folder at `EMBEDDING_MODEL_PATH`, or update `.env` to point to the folder that contains the tokenizer files, `1_Pooling`, and the selected ONNX file.
+If the error mentions `HF_HUB_OFFLINE` or `TRANSFORMERS_OFFLINE`, remove those variables from Railway or provide the model files at `EMBEDDING_MODEL_PATH`. Otherwise, place the local ONNX model folder at `EMBEDDING_MODEL_PATH`, or update `.env` to point to the folder that contains the tokenizer files, `1_Pooling`, and the selected ONNX file.
 
 Browser request blocked:
 CORS is not implemented yet. Add `CORSMiddleware` and configure allowed origins.

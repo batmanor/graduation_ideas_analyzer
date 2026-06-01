@@ -14,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    _model: TextEmbedding | None
-
-    def __init__(self):
+    def __init__(self) -> None:
         self._model = None
 
     def load_model(self) -> TextEmbedding:
