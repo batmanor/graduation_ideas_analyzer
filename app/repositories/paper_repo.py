@@ -22,15 +22,17 @@ class PaperRepository:
         stmt = select(Paper).where(Paper.external_id == external_id)
         paper = await self.session.execute(stmt)
         return paper.scalar_one_or_none()
-    
-    async def get_papers_by_external_ids(self,external_ids: list[int])-> None| list[Paper]:
+
+    async def get_papers_by_external_ids(
+        self, external_ids: list[int]
+    ) -> None | list[Paper]:
         if not external_ids:
             return []
-        
+
         stmt = select(Paper).where(Paper.external_id.in_(external_ids))
-        res =  await self.session.execute(stmt)
+        res = await self.session.execute(stmt)
         return list(res.scalars())
-        
+
     async def get_all_external_ids(self) -> set[int]:
         stmt = select(Paper.external_id)
         res = await self.session.execute(stmt)
@@ -41,13 +43,8 @@ class PaperRepository:
         res = await self.session.execute(stmt)
         return res.scalar_one()
 
-
     async def create_paper(
-        self, 
-        external_id: int, 
-        title: str, 
-        abstract: str, 
-        keywords: str
+        self, external_id: int, title: str, abstract: str, keywords: str
     ) -> Paper | None:
         paper = Paper(
             external_id=external_id,
@@ -77,7 +74,7 @@ class PaperRepository:
         db_paper = await self.get_paper_by_id(paper_id)
         if not db_paper:
             return None
-        
+
         for key, value in data.items():
             if key in ALLOWED_FIELDS:
                 setattr(db_paper, key, value)

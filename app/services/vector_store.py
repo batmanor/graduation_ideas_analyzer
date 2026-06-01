@@ -42,8 +42,8 @@ class VectorStoreService:
         vector = await asyncio.to_thread(self.embedding_service.embed, text)
         return await self.index_store.search(vector, top_k)
 
-    async def get_contents(self) -> list[int]:
-        return await self.index_store.contents()
+    def get_contents(self) -> list[int]:
+        return self.index_store.contents()
 
     def get_faiss_ids(self) -> set[int]:
         return self.index_store.ids()

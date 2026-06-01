@@ -15,3 +15,9 @@ wheels/
 # Model
 models/paraphrase-multilingual-MiniLM-L12-v2/model.onnx
 models/paraphrase-multilingual-MiniLM-L12-v2/model.int8.onnx
+
+.env
+
+/models/
+
+vector_index.faiss

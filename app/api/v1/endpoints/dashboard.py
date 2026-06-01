@@ -36,5 +36,4 @@ async def get_dashboard_papers(
 async def get_index_contents(
     vector_store: VectorStoreDep,
 ):
-    return await vector_store.get_contents()
-
+    return vector_store.get_contents()

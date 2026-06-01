@@ -61,11 +61,11 @@ class FakeVectorStore:
     async def add_vector(self, external_id, text):
         self.added.append((external_id, text))
 
-    async def get_contents(self):
+    def get_contents(self):
         return [external_id for external_id, _ in self.added]
 
     async def check_sync(self, external_ids):
-        faiss_ids = set(await self.get_contents())
+        faiss_ids = set(self.get_contents())
         return {
             "is_sync": external_ids == faiss_ids,
             "missing_from_faiss": sorted(external_ids - faiss_ids),
@@ -100,7 +100,9 @@ async def _build_client():
 
     app.dependency_overrides[dependencies.get_paper_service] = lambda: paper_service
     app.dependency_overrides[dependencies.get_faiss_mgr] = lambda: vector_store
-    app.dependency_overrides[dependencies.get_llm_service] = lambda: None  # no real Gemini calls
+    app.dependency_overrides[dependencies.get_llm_service] = lambda: (
+        None
+    )  # no real Gemini calls
     app.dependency_overrides[dependencies.get_validation_service] = lambda: (
         FakeValidationService()
     )
@@ -108,7 +110,6 @@ async def _build_client():
     transport = ASGITransport(app=app)
     client = AsyncClient(transport=transport, base_url="http://testserver")
     return client, vector_store
-
 
 
 async def _exercise_api_contracts():
@@ -125,7 +126,11 @@ async def _exercise_api_contracts():
         )
         validate_response = await client.post(
             "/api/v1/validate/",
-            json={"title": "Idea", "abstract": "Idea abstract", "keywords": "idea keywords"},
+            json={
+                "title": "Idea",
+                "abstract": "Idea abstract",
+                "keywords": "idea keywords",
+            },
         )
         dashboard_papers_response = await client.get("/api/v1/dashboard/papers")
         index_response = await client.get("/api/v1/dashboard/index-contents")
