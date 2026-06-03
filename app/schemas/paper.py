@@ -1,12 +1,11 @@
-from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PaperCreate(BaseModel):
-    external_id: int
-    title: str
-    abstract: str
-    keywords: Optional[str] = None
+    external_id: int = Field(gt=0)
+    title: str = Field(min_length=1, max_length=500)
+    abstract: str = Field(min_length=1, max_length=10000)
+    keywords: str | None = Field(default=None, max_length=1000)
 
 
 class PaperResponse(BaseModel):
@@ -14,17 +13,15 @@ class PaperResponse(BaseModel):
     external_id: int
     title: str
     abstract: str
-    keywords: Optional[str] = None
+    keywords: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PaperUpdate(BaseModel):
-    id: int
-    title: Optional[str] = None
-    abstract: Optional[str] = None
-    keywords: Optional[str] = None
+    id: int = Field(gt=0)
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    abstract: str | None = Field(default=None, min_length=1, max_length=10000)
+    keywords: str | None = Field(default=None, max_length=1000)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.api.dependencies import PaperServiceDep, VectorStoreDep
 
 router = APIRouter(tags=["faiss_sync"])
@@ -20,7 +20,7 @@ async def sync_faiss_index(vector_store: VectorStoreDep):
         await vector_store.persist()
         return {"message": "FAISS index synchronized to disk."}
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=503, detail=str(e)) from e
 
 
 @router.post("/sync/full", response_model=dict)

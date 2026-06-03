@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from app.schemas.validation import DashboardResponse
 from app.schemas.paper import PaperResponse
 from app.api.dependencies import PaperServiceDep, VectorStoreDep
@@ -10,8 +10,8 @@ router = APIRouter()
 async def get_dashboard_details(
     paper_service: PaperServiceDep,
     vector_store: VectorStoreDep,
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ):
     total = await paper_service.count_papers()
     papers = await paper_service.get_all_papers(skip=offset, limit=limit)
@@ -25,8 +25,8 @@ async def get_dashboard_details(
 @router.get("/papers", response_model=list[PaperResponse])
 async def get_dashboard_papers(
     paper_service: PaperServiceDep,
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ):
     papers = await paper_service.get_all_papers(skip=offset, limit=limit)
     return papers

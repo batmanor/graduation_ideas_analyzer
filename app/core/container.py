@@ -10,7 +10,12 @@ ready without waiting for ML initialization.
 from dataclasses import dataclass, field
 import threading
 
-from app.services.embedding_service import EmbeddingService
+from app.core.config import settings
+from app.services.embedding_backend import (
+    EmbeddingBackend,
+    GeminiEmbeddingBackend,
+    LocalEmbeddingBackend,
+)
 from app.services.llm_service import GeminiLLMService
 from app.services.vector_store import VectorStoreService
 
@@ -18,22 +23,31 @@ from app.services.vector_store import VectorStoreService
 @dataclass
 class AppContainer:
     llm_service: GeminiLLMService
-    embedding_service: EmbeddingService | None = None
+    embedding_backend: EmbeddingBackend | None = None
     vector_store: VectorStoreService | None = None
     _lock: threading.RLock = field(
         default_factory=threading.RLock, init=False, repr=False
     )
 
-    def get_embedding_service(self) -> EmbeddingService:
+    def get_embedding_backend(self) -> EmbeddingBackend:
         with self._lock:
-            if self.embedding_service is None:
-                self.embedding_service = EmbeddingService()
-            return self.embedding_service
+            if self.embedding_backend is not None:
+                return self.embedding_backend
+
+            if settings.EMBEDDING_PROVIDER == "local":
+                self.embedding_backend = LocalEmbeddingBackend()
+            elif settings.EMBEDDING_PROVIDER == "gemini":
+                self.embedding_backend = GeminiEmbeddingBackend(self.llm_service)
+            else:
+                raise ValueError(
+                    "EMBEDDING_PROVIDER must be either 'local' or 'gemini'."
+                )
+            return self.embedding_backend
 
     def get_vector_store(self) -> VectorStoreService:
         with self._lock:
             if self.vector_store is None:
-                self.vector_store = VectorStoreService(self.get_embedding_service())
+                self.vector_store = VectorStoreService(self.get_embedding_backend())
             return self.vector_store
 
     async def persist_vector_store_if_loaded(self) -> None:

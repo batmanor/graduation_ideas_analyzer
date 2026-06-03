@@ -47,7 +47,7 @@ class PaperService:
                 )
             except Exception as e:
                 raise HTTPException(
-                    404,
+                    503,
                     "Couldn't contact with LLM to generate keywords, try adding keywords by yourself.",
                 ) from e
 

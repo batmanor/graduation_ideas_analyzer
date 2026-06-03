@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.api import dependencies
+from app.main import app as main_app
 from app.api.v1.router import api_router
 from app.schemas.validation import ValidationResponse
 
@@ -58,11 +59,11 @@ class FakeVectorStore:
     def __len__(self):
         return len(self.added)
 
-    async def add_vector(self, external_id, text):
-        self.added.append((external_id, text))
+    async def index_paper(self, paper):
+        self.added.append((paper.external_id, paper.title, paper.abstract))
 
     def get_contents(self):
-        return [external_id for external_id, _ in self.added]
+        return [external_id for external_id, _, _ in self.added]
 
     async def check_sync(self, external_ids):
         faiss_ids = set(self.get_contents())
@@ -157,10 +158,10 @@ async def _exercise_api_contracts():
 def test_api_contracts_with_dependency_overrides():
     result = asyncio.run(_exercise_api_contracts())
 
-    assert result["create"].status_code == 202
+    assert result["create"].status_code == 201
     assert result["create"].json()["external_id"] == 201
     assert result["vector_store"].added == [
-        (201, "Client Paper. A paper from a client app.")
+        (201, "Client Paper", "A paper from a client app.")
     ]
 
     assert result["validate"].status_code == 200
@@ -193,3 +194,7 @@ def test_api_contracts_with_dependency_overrides():
     assert result["vector_store"].persisted is True
     assert result["vector_store"].full_synced is True
     assert result["vector_store"].full_rebuilt is True
+
+
+def test_main_app_imports_successfully():
+    assert main_app.title == "Multilingual Paper Idea Validator"

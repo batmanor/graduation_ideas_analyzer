@@ -20,3 +20,8 @@ def test_paper_model_declares_expected_table_and_columns():
     assert columns["title"].nullable is False
     assert columns["abstract"].nullable is False
     assert columns["keywords"].nullable is True
+    assert str(columns["created_at"].type) == "DATETIME"
+    assert str(columns["last_updated"].type) == "DATETIME"
+    assert columns["created_at"].server_default is not None
+    assert columns["last_updated"].server_default is not None
+    assert columns["last_updated"].onupdate is not None

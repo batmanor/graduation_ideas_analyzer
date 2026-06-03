@@ -2,7 +2,7 @@ import asyncio
 
 import numpy as np
 
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_backend import EmbeddingService, GeminiEmbeddingBackend
 from app.services import vector_store
 from app.services.vector_store import VectorStoreService
 
@@ -19,17 +19,19 @@ class FakeEmbeddingService:
     def __init__(self, embeddings):
         self.embeddings = embeddings
 
-    def embed(self, text: str):
+    async def embed(self, text: str):
         return self.embeddings[text]
 
-    def embed_batch(self, texts: list[str]):
+    async def embed_batch(self, texts: list[str]):
         return np.concatenate([self.embeddings[text] for text in texts], axis=0)
 
 
 class FakePaper:
-    def __init__(self, external_id: int, abstract: str):
+    def __init__(self, external_id: int, text: str):
         self.external_id = external_id
-        self.abstract = abstract
+        self.title = text
+        self.abstract = ""
+        self.keywords = None
 
 
 class FakePaperService:
@@ -51,22 +53,25 @@ class FakePaperService:
 
 async def _exercise_vector_store(tmp_path, monkeypatch):
     index_path = tmp_path / "vector_index.faiss"
-    monkeypatch.setattr(vector_store, "FAISS_INDEX_PATH", str(index_path))
+    monkeypatch.setattr(vector_store.settings, "FAISS_INDEX_PATH", str(index_path))
 
     embeddings = {
-        "First text": np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32),
-        "Second text": np.array([[0.0, 1.0, 0.0, 0.0]], dtype=np.float32),
+        "Title: First text\nAbstract: \nKeywords: ": np.array(
+            [[1.0, 0.0, 0.0, 0.0]], dtype=np.float32
+        ),
+        "Title: Second text\nAbstract: \nKeywords: ": np.array(
+            [[0.0, 1.0, 0.0, 0.0]], dtype=np.float32
+        ),
         "Query": np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32),
     }
-    monkeypatch.setattr(vector_store.settings, "EMBEDDING_DIM", 4)
 
     store = VectorStoreService(FakeEmbeddingService(embeddings))
     empty_contents = store.get_contents()
     empty_sync = await store.check_sync({1})
 
-    await store.add_vector(1, "First text")
-    await store.add_vector(1, "First text")
-    await store.add_vector(2, "Second text")
+    await store.index_paper(FakePaper(1, "First text"))
+    await store.index_paper(FakePaper(1, "First text"))
+    await store.index_paper(FakePaper(2, "Second text"))
     distances, indices = await store.search("Query", top_k=2)
     contents = store.get_contents()
     sync = await store.check_sync({1, 3})
@@ -107,18 +112,21 @@ def test_vector_store_add_search_contents_and_sync(tmp_path, monkeypatch):
 
 async def _exercise_full_sync_rebuild(tmp_path, monkeypatch):
     index_path = tmp_path / "vector_index.faiss"
-    monkeypatch.setattr(vector_store, "FAISS_INDEX_PATH", str(index_path))
-    monkeypatch.setattr(vector_store.settings, "EMBEDDING_DIM", 4)
+    monkeypatch.setattr(vector_store.settings, "FAISS_INDEX_PATH", str(index_path))
 
     embeddings = {
-        "First text": np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32),
-        "Stale text": np.array([[0.0, 1.0, 0.0, 0.0]], dtype=np.float32),
+        "Title: First text\nAbstract: \nKeywords: ": np.array(
+            [[1.0, 0.0, 0.0, 0.0]], dtype=np.float32
+        ),
+        "Title: Stale text\nAbstract: \nKeywords: ": np.array(
+            [[0.0, 1.0, 0.0, 0.0]], dtype=np.float32
+        ),
         "Query": np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32),
     }
 
     store = VectorStoreService(FakeEmbeddingService(embeddings))
-    await store.add_vector(1, "First text")
-    await store.add_vector(99, "Stale text")
+    await store.index_paper(FakePaper(1, "First text"))
+    await store.index_paper(FakePaper(99, "Stale text"))
 
     paper_service = FakePaperService([FakePaper(1, "First text")])
     await asyncio.wait_for(store.full_sync(paper_service), timeout=1)
@@ -134,17 +142,22 @@ def test_vector_store_full_sync_rebuild_removes_stale_entries(tmp_path, monkeypa
 
 async def _exercise_full_sync_adds_multiple_missing_entries(tmp_path, monkeypatch):
     index_path = tmp_path / "vector_index.faiss"
-    monkeypatch.setattr(vector_store, "FAISS_INDEX_PATH", str(index_path))
-    monkeypatch.setattr(vector_store.settings, "EMBEDDING_DIM", 4)
+    monkeypatch.setattr(vector_store.settings, "FAISS_INDEX_PATH", str(index_path))
 
     embeddings = {
-        "First text": np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32),
-        "Second text": np.array([[0.0, 1.0, 0.0, 0.0]], dtype=np.float32),
-        "Third text": np.array([[0.0, 0.0, 1.0, 0.0]], dtype=np.float32),
+        "Title: First text\nAbstract: \nKeywords: ": np.array(
+            [[1.0, 0.0, 0.0, 0.0]], dtype=np.float32
+        ),
+        "Title: Second text\nAbstract: \nKeywords: ": np.array(
+            [[0.0, 1.0, 0.0, 0.0]], dtype=np.float32
+        ),
+        "Title: Third text\nAbstract: \nKeywords: ": np.array(
+            [[0.0, 0.0, 1.0, 0.0]], dtype=np.float32
+        ),
     }
 
     store = VectorStoreService(FakeEmbeddingService(embeddings))
-    await store.add_vector(1, "First text")
+    await store.index_paper(FakePaper(1, "First text"))
 
     paper_service = FakePaperService(
         [
@@ -170,7 +183,7 @@ def test_embedding_service_embed_batch_preserves_one_row_per_text():
     service = EmbeddingService()
     service._model = FakeModel()
 
-    vectors = service.embed_batch(["First text", "Second text"])
+    vectors = asyncio.run(service.embed_batch(["First text", "Second text"]))
 
     assert vectors.shape == (2, 4)
     np.testing.assert_allclose(
@@ -182,4 +195,54 @@ def test_embedding_service_embed_batch_preserves_one_row_per_text():
             ],
             dtype=np.float32,
         ),
+    )
+
+
+class FakeGeminiEmbedding:
+    def __init__(self, values):
+        self.values = values
+
+
+class FakeGeminiModels:
+    async def embed_content(self, model, contents):
+        assert model == "fake-embedding-model"
+        assert contents == ["A", "B"]
+        return type(
+            "Response",
+            (),
+            {
+                "embeddings": [
+                    FakeGeminiEmbedding([3.0, 4.0]),
+                    FakeGeminiEmbedding([0.0, 2.0]),
+                ]
+            },
+        )()
+
+
+class FakeGeminiAio:
+    models = FakeGeminiModels()
+
+
+class FakeGeminiClient:
+    aio = FakeGeminiAio()
+
+
+class FakeGeminiService:
+    client = FakeGeminiClient()
+
+
+def test_gemini_embedding_backend_normalizes_rows(monkeypatch):
+    monkeypatch.setattr(
+        vector_store.settings, "GEMINI_EMBEDDING_MODEL", "fake-embedding-model"
+    )
+    backend = GeminiEmbeddingBackend(FakeGeminiService())
+
+    vectors = asyncio.run(backend.embed_batch(["A", "B"]))
+
+    assert vectors.dtype == np.float32
+    assert vectors.shape == (2, 2)
+    np.testing.assert_allclose(
+        vectors,
+        np.array([[0.6, 0.8], [0.0, 1.0]], dtype=np.float32),
+        rtol=1e-6,
     )

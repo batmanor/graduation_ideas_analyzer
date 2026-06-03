@@ -5,6 +5,7 @@ import asyncio
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -13,8 +14,7 @@ if str(ROOT) not in sys.path:
 
 from app.core.config import settings  # noqa: E402
 from app.core.metrics import get_rss_mb, metrics  # noqa: E402
-from app.services import vector_store  # noqa: E402
-from app.services.embedding_service import EmbeddingService  # noqa: E402
+from app.services.embedding_backend import EmbeddingService  # noqa: E402
 from app.services.vector_store import VectorStoreService  # noqa: E402
 from app.utils import download_model  # noqa: E402
 
@@ -45,18 +45,24 @@ async def run_probe(max_rss_mb: float) -> None:
     embedding_service.get_model()
     report("embedding_model_loaded", max_rss_mb)
 
-    embedding_service.embed(PROBE_TEXT)
+    await embedding_service.embed(PROBE_TEXT)
     report("first_embedding_completed", max_rss_mb)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         index_path = Path(tmp_dir) / "probe_vector_index.faiss"
-        original_index_path = vector_store.FAISS_INDEX_PATH
-        vector_store.FAISS_INDEX_PATH = str(index_path)
+        original_index_path = settings.FAISS_INDEX_PATH
+        settings.FAISS_INDEX_PATH = str(index_path)
         try:
             store = VectorStoreService(embedding_service)
             report("faiss_store_loaded", max_rss_mb)
 
-            await store.add_vector(1, PROBE_TEXT)
+            paper = SimpleNamespace(
+                external_id=1,
+                title="Probe paper",
+                abstract=PROBE_TEXT,
+                keywords="probe",
+            )
+            await store.index_paper(paper)
             report("faiss_first_add_completed", max_rss_mb)
 
             await store.search(PROBE_TEXT, top_k=1)
@@ -65,7 +71,7 @@ async def run_probe(max_rss_mb: float) -> None:
             await store.persist()
             report("faiss_persist_completed", max_rss_mb)
         finally:
-            vector_store.FAISS_INDEX_PATH = original_index_path
+            settings.FAISS_INDEX_PATH = original_index_path
 
     print("\nTiming snapshot:")
     for name, timing in metrics.snapshot()["timings"].items():

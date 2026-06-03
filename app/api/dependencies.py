@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.container import AppContainer
 from app.core.database import get_db
 from app.services import PaperService, ValidationService, VectorStoreService
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_backend import EmbeddingBackend
 from app.services.llm_service import GeminiLLMService
 
 
@@ -20,8 +20,8 @@ def get_container(request: Request) -> AppContainer:
 
 def get_embedding_service(
     container: Annotated[AppContainer, Depends(get_container)],
-) -> EmbeddingService:
-    return container.get_embedding_service()
+) -> EmbeddingBackend:
+    return container.get_embedding_backend()
 
 
 def get_faiss_mgr(

@@ -7,10 +7,11 @@ from fastapi import FastAPI
 from .api.v1.router import api_router
 from .core.config import settings
 from .core.container import AppContainer
-from .core.database import engine
+from .core.database import async_session, engine
 from .core.logging import configure_logging
 from .models import Base
 from .services.llm_service import GeminiLLMService
+from .services.paper_service import PaperService
 
 
 configure_logging()
@@ -27,7 +28,10 @@ async def lifespan(app: FastAPI):
     app.state.container = AppContainer(llm_service=GeminiLLMService())
 
     def prewarm_model():
-        app.state.container.get_embedding_service().get_model()
+        embedding_backend = app.state.container.get_embedding_backend()
+        get_model = getattr(embedding_backend, "get_model", None)
+        if get_model is not None:
+            get_model()
 
     if settings.PREWARM_EMBEDDING_MODEL:
         try:
@@ -38,6 +42,16 @@ async def lifespan(app: FastAPI):
             raise RuntimeError("Model initialization failed") from e
     else:
         logger.info("Embedding model prewarm disabled")
+
+    if settings.AUTO_REBUILD_INDEX_ON_STARTUP:
+        try:
+            async with async_session() as session:
+                paper_service = PaperService(session, app.state.container.llm_service)
+                await app.state.container.get_vector_store().full_rebuild(paper_service)
+            logger.info("FAISS index rebuilt from database")
+        except Exception as e:
+            logger.exception("Failed to rebuild FAISS index on startup: %s", e)
+            raise RuntimeError("FAISS startup rebuild failed") from e
 
     logger.info("Application startup complete")
 

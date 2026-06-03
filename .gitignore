@@ -21,3 +21,4 @@ models/paraphrase-multilingual-MiniLM-L12-v2/model.int8.onnx
 /models/
 
 vector_index.faiss
+papers.db

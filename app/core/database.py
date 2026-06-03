@@ -2,8 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 
 from .config import settings
 
-DATABASE_URL = "sqlite+aiosqlite:///./papers.db"
-engine = create_async_engine(DATABASE_URL, echo=settings.SQLALCHEMY_ECHO)
+engine = create_async_engine(settings.DATABASE_URL, echo=settings.SQLALCHEMY_ECHO)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

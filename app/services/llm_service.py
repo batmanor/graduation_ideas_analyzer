@@ -3,13 +3,14 @@ import logging
 from google import genai
 
 from ..core.config import settings
-from ..models import Paper
 
 logger = logging.getLogger(__name__)
 
 
 class GeminiLLMService:
     def __init__(self):
+        if not settings.GEMINI_API_KEY:
+            logger.warning("GEMINI_API_KEY is not configured")
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
         self.models = (
             "gemini-3-flash-preview",
@@ -39,22 +40,4 @@ class GeminiLLMService:
                 )
                 return await self.generate_keywords_async(title, abstract, tries + 1)
             raise e
-        return response.text
-
-    # Not used for now, could be used in the future to save more space for the hosting
-    async def analyze_novelty(
-        self, idea_title: str, idea_abstract: str, similar_papers: list[Paper]
-    ) -> str:
-        """will query the LLM for novelty analysis."""
-        prompt = f"""Analyze the novelty of the following idea:
-            Title: {idea_title}
-            Abstract: {idea_abstract},
-            Similar papers: {similar_papers},
-            return a novelty analysis."""
-        response = await self.client.aio.models.generate_content(
-            model="gemini-3-flash-preview", contents=prompt
-        )
-        logger.debug(
-            "Generated novelty analysis for %s similar papers", len(similar_papers)
-        )
         return response.text

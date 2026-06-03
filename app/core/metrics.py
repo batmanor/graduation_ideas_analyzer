@@ -7,8 +7,6 @@ import threading
 import time
 from typing import Iterator
 
-from pydantic import Field
-
 
 @dataclass
 class TimingStats:

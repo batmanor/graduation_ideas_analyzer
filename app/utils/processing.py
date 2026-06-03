@@ -1,20 +1,16 @@
 import re
 
+_URL_RE = re.compile(r"https?://\S+")
+_DOI_RE = re.compile(r"\b10\.\d{4,9}/\S+\b", re.IGNORECASE)
+_CITATION_RE = re.compile(r"\[[\d,\s-]+\]")
+
 
 def strip_noise(text: str) -> str:
-    """
-    Minimally clean the text by removing:
-    - URLs
-    - DOIs
-    - Citation brackets like [1], [1, 2], etc.
-    """
-    # Remove URLs
-    text = re.sub(r"http[s]?://\S+", "", text)
-    # Remove DOIs
-    text = re.sub(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b", "", text, flags=re.IGNORECASE)
-    # Remove citation brackets
-    text = re.sub(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]", "", text)
+    text = _URL_RE.sub("", text)
+    text = _DOI_RE.sub("", text)
+    text = _CITATION_RE.sub("", text)
+    return " ".join(text.split())
 
-    # Clean up extra spaces left behind
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+
+def build_text(title: str, abstract: str, keywords: str | None = None) -> str:
+    return f"Title: {title}\nAbstract: {abstract}\nKeywords: {keywords or ''}"

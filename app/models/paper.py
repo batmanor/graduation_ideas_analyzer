@@ -1,4 +1,6 @@
-from sqlalchemy import Integer, String, func
+from datetime import datetime
+
+from sqlalchemy import DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models import Base
 
@@ -15,7 +17,12 @@ class Paper(Base):
     abstract: Mapped[str] = mapped_column(String, nullable=False)
     keywords: Mapped[str] = mapped_column(String, nullable=True)
 
-    created_at: Mapped[str] = mapped_column(String, nullable=False, default=func.now())
-    last_updated: Mapped[str] = mapped_column(
-        String, nullable=False, default=func.now()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_updated: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )

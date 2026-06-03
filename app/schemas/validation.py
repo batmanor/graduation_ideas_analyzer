@@ -1,12 +1,11 @@
-from typing import List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from .paper import PaperResponse
 
 
 class IdeaSubmit(BaseModel):
-    title: str
-    abstract: str
-    keywords: str
+    title: str = Field(min_length=1, max_length=500)
+    abstract: str = Field(min_length=1, max_length=10000)
+    keywords: str = Field(min_length=1, max_length=1000)
 
 
 class SimilarPaperMatch(BaseModel):
@@ -18,10 +17,10 @@ class SimilarPaperMatch(BaseModel):
 class ValidationResponse(BaseModel):
     is_novel: bool
     message: str
-    similar_papers: List[SimilarPaperMatch] = []
+    similar_papers: list[SimilarPaperMatch] = Field(default_factory=list)
 
 
 class DashboardResponse(BaseModel):
     total_papers: int
     index_length: int
-    papers: List[PaperResponse]
+    papers: list[PaperResponse] = Field(default_factory=list)

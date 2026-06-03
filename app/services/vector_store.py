@@ -1,26 +1,26 @@
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Iterable
 
 import numpy as np
 
+from app.utils.processing import build_text
+
 from ..core.config import settings
 from ..models.paper import Paper
-from ..services.embedding_service import EmbeddingService
+from ..services.embedding_backend import EmbeddingBackend
 from ..services.faiss_index_store import FaissIndexStore
 
 if TYPE_CHECKING:
     from ..services.paper_service import PaperService
 
 
-FAISS_INDEX_PATH = "vector_index.faiss"
 logger = logging.getLogger(__name__)
 
 
 class VectorStoreService:
-    def __init__(self, embedding_service: EmbeddingService):
-        self.embedding_service = embedding_service
-        self.index_store = FaissIndexStore(FAISS_INDEX_PATH)
+    def __init__(self, embedding_backend: EmbeddingBackend):
+        self.embedding_backend = embedding_backend
+        self.index_store = FaissIndexStore(settings.FAISS_INDEX_PATH)
 
     def __len__(self) -> int:
         return len(self.index_store)
@@ -28,18 +28,13 @@ class VectorStoreService:
     async def persist(self) -> None:
         await self.index_store.persist()
 
-    async def add_vector(self, external_id: int, text: str) -> None:
-        vector = await asyncio.to_thread(self.embedding_service.embed, text)
-
-        try:
-            await self.index_store.add(external_id, vector)
-        except Exception as e:
-            logger.exception(
-                "Failed to add vector for external_id=%s: %s", external_id, e
-            )
+    async def index_paper(self, paper: Paper) -> None:
+        text = build_text(paper.title, paper.abstract, paper.keywords)
+        vector = await self.embedding_backend.embed(text)
+        await self.index_store.add(paper.external_id, vector)
 
     async def search(self, text: str, top_k: int = 5) -> tuple[np.ndarray, np.ndarray]:
-        vector = await asyncio.to_thread(self.embedding_service.embed, text)
+        vector = await self.embedding_backend.embed(text)
         return await self.index_store.search(vector, top_k)
 
     def get_contents(self) -> list[int]:
@@ -106,10 +101,14 @@ class VectorStoreService:
     ) -> tuple[list[int], np.ndarray]:
         paper_list = list(papers)
         if not paper_list:
-            return [], np.empty((0, settings.EMBEDDING_DIM), dtype=np.float32)
+            return [], np.empty((0, 0), dtype=np.float32)
 
-        texts = [paper.abstract for paper in paper_list]
+        texts = [
+            build_text(paper.title, paper.abstract, paper.keywords)
+            for paper in paper_list
+        ]
+
         ids = [paper.external_id for paper in paper_list]
-        vectors = await asyncio.to_thread(self.embedding_service.embed_batch, texts)
+        vectors = await self.embedding_backend.embed_batch(texts)
 
         return ids, vectors

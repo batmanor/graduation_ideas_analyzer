@@ -1,11 +1,10 @@
 import asyncio
 import logging
 import os
+from pathlib import Path
 
 import faiss  # pyright: ignore[reportMissingTypeStubs]
 import numpy as np
-
-from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -13,15 +12,19 @@ logger = logging.getLogger(__name__)
 class FaissIndexStore:
     def __init__(self, index_path: str):
         self.index_path = index_path
-        self.index = self._new_index()
+        self.index = None
         self._write_lock: asyncio.Lock | None = None
         self.load()
 
     def __len__(self) -> int:
-        return int(self.index.ntotal)
+        return int(self.index.ntotal) if self.index is not None else 0
 
-    def _new_index(self):
-        return faiss.IndexIDMap(faiss.IndexFlatIP(settings.EMBEDDING_DIM))
+    def _new_index(self, dimension: int):
+        return faiss.IndexIDMap(faiss.IndexFlatIP(dimension))
+
+    def _ensure_index(self, dimension: int) -> None:
+        if self.index is None:
+            self.index = self._new_index(dimension)
 
     def _get_lock(self) -> asyncio.Lock:
         if self._write_lock is None:
@@ -34,15 +37,12 @@ class FaissIndexStore:
             return
 
         self.index = faiss.read_index(self.index_path)
-        if self.index.d != settings.EMBEDDING_DIM:
-            raise RuntimeError(
-                "Existing FAISS index dimension does not match "
-                f"EMBEDDING_DIM={settings.EMBEDDING_DIM}. Rebuild the index."
-            )
-
         logger.info("Loaded FAISS index with %s vectors", self.index.ntotal)
 
     def save(self) -> None:
+        if self.index is None:
+            Path(self.index_path).unlink(missing_ok=True)
+            return
         faiss.write_index(self.index, self.index_path)
 
     async def persist(self) -> None:
@@ -50,7 +50,11 @@ class FaissIndexStore:
             self.save()
 
     def ids(self) -> set[int]:
-        if self.index.ntotal == 0 or not hasattr(self.index, "id_map"):
+        if (
+            self.index is None
+            or self.index.ntotal == 0
+            or not hasattr(self.index, "id_map")
+        ):
             return set()
 
         return {int(idx) for idx in faiss.vector_to_array(self.index.id_map)}  # type: ignore
@@ -69,6 +73,9 @@ class FaissIndexStore:
                 f"Expected one FAISS id per vector, got {len(ids)} ids and "
                 f"{len(vectors)} vectors."
             )
+        self._ensure_index(vectors.shape[1])
+        if self.index is None:
+            raise RuntimeError("FAISS index was not initialized.")
         if vectors.shape[1] != self.index.d:
             raise ValueError(
                 f"Embedding dimension {vectors.shape[1]} does not match FAISS "
@@ -97,7 +104,7 @@ class FaissIndexStore:
     async def search(
         self, vector: np.ndarray, top_k: int
     ) -> tuple[np.ndarray, np.ndarray]:
-        if self.index.ntotal == 0:
+        if self.index is None or self.index.ntotal == 0:
             return np.array([]), np.array([])
 
         distances, indices = self.index.search(vector, top_k)  # type: ignore
@@ -106,7 +113,7 @@ class FaissIndexStore:
 
     async def replace(self, ids: list[int], vectors: np.ndarray) -> None:
         async with self._get_lock():
-            self.index = self._new_index()
+            self.index = None
             if ids and len(vectors) > 0:
                 vectors = self._validate_vectors(ids, vectors)
                 ids_np = np.array(ids, dtype=np.int64)
