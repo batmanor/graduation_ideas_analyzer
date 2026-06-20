@@ -9,7 +9,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-class FaissIndexStore:
+class FaissIndex:
     def __init__(self, index_path: str):
         self.index_path = index_path
         self.index = None
@@ -20,7 +20,7 @@ class FaissIndexStore:
         return int(self.index.ntotal) if self.index is not None else 0
 
     def _new_index(self, dimension: int):
-        return faiss.IndexIDMap(faiss.IndexFlatIP(dimension))
+        return faiss.IndexIDMap2(faiss.IndexFlatIP(dimension))
 
     def _ensure_index(self, dimension: int) -> None:
         if self.index is None:
@@ -35,9 +35,11 @@ class FaissIndexStore:
         if not os.path.exists(self.index_path):
             logger.info("Initialized empty FAISS index")
             return
-
-        self.index = faiss.read_index(self.index_path)
-        logger.info("Loaded FAISS index with %s vectors", self.index.ntotal)
+        try:
+            self.index = faiss.read_index(self.index_path)
+        except Exception:
+            logger.exception("Corrupted index, starting fresh")
+            self.index = None
 
     def save(self) -> None:
         if self.index is None:
@@ -57,7 +59,7 @@ class FaissIndexStore:
         ):
             return set()
 
-        return {int(idx) for idx in faiss.vector_to_array(self.index.id_map)}  # type: ignore
+        return {int(idx) for idx in faiss.vector_to_array(self.index.id_map)}
 
     def contents(self) -> list[int]:
         return sorted(self.ids())
@@ -83,13 +85,13 @@ class FaissIndexStore:
             )
         return vectors
 
-    async def add(self, external_id: int, vector: np.ndarray) -> bool:
+    async def add(self, id: int, vector: np.ndarray) -> bool:
         async with self._get_lock():
-            if external_id in self.ids():
+            if id in self.ids():
                 return False
 
-            vector = self._validate_vectors([external_id], vector)
-            self.index.add_with_ids(vector, np.array([external_id], dtype=np.int64))  # type: ignore
+            vector = self._validate_vectors([id], vector)
+            self.index.add_with_ids(vector, np.array([id], dtype=np.int64))  # type: ignore
             return True
 
     async def add_many(self, ids: list[int], vectors: np.ndarray) -> None:
@@ -100,6 +102,34 @@ class FaissIndexStore:
             vectors = self._validate_vectors(ids, vectors)
             ids_np = np.array(ids, dtype=np.int64)
             self.index.add_with_ids(vectors, ids_np)  # type: ignore
+
+    async def remove(self, id: int) -> bool:
+        async with self._get_lock():
+            if self.index == None:
+                return False
+            ids_np = np.array([id], dtype=np.int64)
+            removed = self.index.remove_ids(ids_np)
+            return removed > 0
+
+    async def remove_many(self, ids: list[int]) -> int:
+        if not ids:
+            return 0
+        async with self._get_lock():
+            if self.index is None:
+                return 0
+            ids_np = np.array(ids, dtype=np.int64)
+            removed = self.index.remove_ids(ids_np)
+            
+            return removed
+
+    async def update(self, external_id: int, new_vector: np.ndarray) -> None:
+        async with self._get_lock():
+            # Remove first; if it doesn't exist, add.
+            ids_np = np.array([external_id], dtype=np.int64)
+            self.index.remove_ids(ids_np)
+            # Add the new vector
+            self._validate_vectors([external_id], new_vector)
+            self.index.add_with_ids(new_vector, ids_np)
 
     async def search(
         self, vector: np.ndarray, top_k: int

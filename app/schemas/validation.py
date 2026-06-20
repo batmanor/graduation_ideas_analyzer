@@ -1,5 +1,4 @@
 from pydantic import BaseModel, Field
-from .paper import PaperResponse
 
 
 class IdeaSubmit(BaseModel):
@@ -9,8 +8,9 @@ class IdeaSubmit(BaseModel):
 
 
 class SimilarPaperMatch(BaseModel):
-    external_id: int
+    external_id: str
     title: str
+    abstract: str   
     similarity_score: float
 
 
@@ -23,4 +23,3 @@ class ValidationResponse(BaseModel):
 class DashboardResponse(BaseModel):
     total_papers: int
     index_length: int
-    papers: list[PaperResponse] = Field(default_factory=list)

@@ -12,12 +12,7 @@ class GeminiLLMService:
         if not settings.GEMINI_API_KEY:
             logger.warning("GEMINI_API_KEY is not configured")
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        self.models = (
-            "gemini-3-flash-preview",
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
-            "gemini-2.0-flash",
-        )
+        self.model = settings.GEMINI_MODEL
 
     async def generate_keywords_async(
         self, title: str, abstract: str, tries: int = 0
@@ -29,15 +24,9 @@ class GeminiLLMService:
             return only the keywords separated by commas."""
         try:
             response = await self.client.aio.models.generate_content(
-                model=self.models[tries], contents=prompt
+                model=self.model, contents=prompt
             )
         except genai.types.ServerError as e:  # type: ignore
-            if tries < len(self.models) - 1:
-                logger.warning(
-                    "Gemini model %s failed; retrying with %s",
-                    self.models[tries],
-                    self.models[tries + 1],
-                )
-                return await self.generate_keywords_async(title, abstract, tries + 1)
+            logger.warning("Gemini model %s failed.")
             raise e
-        return response.text
+        return response.text if response.text else ''

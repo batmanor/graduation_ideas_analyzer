@@ -29,7 +29,7 @@ def test_ensure_model_skips_download_when_model_files_exist(tmp_path, monkeypatc
 
     monkeypatch.setattr(download_model, "snapshot_download", fail_download)
 
-    download_model.ensure_model()
+    download_model.get_model()
 
 
 def test_ensure_model_rejects_missing_model_when_huggingface_is_offline(
@@ -39,7 +39,7 @@ def test_ensure_model_rejects_missing_model_when_huggingface_is_offline(
     monkeypatch.setenv("HF_HUB_OFFLINE", "1")
 
     with pytest.raises(RuntimeError, match="HF_HUB_OFFLINE"):
-        download_model.ensure_model()
+        download_model.get_model()
 
 
 def test_ensure_model_downloads_missing_model_when_online(tmp_path, monkeypatch):
@@ -55,4 +55,4 @@ def test_ensure_model_downloads_missing_model_when_online(tmp_path, monkeypatch)
 
     monkeypatch.setattr(download_model, "snapshot_download", fake_download)
 
-    download_model.ensure_model()
+    download_model.get_model()

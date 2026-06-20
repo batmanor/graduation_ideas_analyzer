@@ -1,6 +1,6 @@
 import logging
 
-from .config import settings
+from ..core.config import settings
 
 
 def configure_logging() -> None:

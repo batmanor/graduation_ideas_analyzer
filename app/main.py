@@ -8,7 +8,7 @@ from .api.v1.router import api_router
 from .core.config import settings
 from .core.container import AppContainer
 from .core.database import async_session, engine
-from .core.logging import configure_logging
+from .utils.logging import configure_logging
 from .models import Base
 from .services.llm_service import GeminiLLMService
 from .services.paper_service import PaperService

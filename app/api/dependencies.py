@@ -2,7 +2,9 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from supabase import create_async_client, AsyncClient
 
+from app.core.config import settings
 from app.core.container import AppContainer
 from app.core.database import get_db
 from app.services import PaperService, ValidationService, VectorStoreService
@@ -12,6 +14,13 @@ from app.services.llm_service import GeminiLLMService
 
 # Singleton accessors
 
+async def get_supabase_client() -> AsyncClient:
+    client = await create_async_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+    try:
+        yield client
+    finally:
+        # optional: close if the client supports it
+        pass
 
 def get_container(request: Request) -> AppContainer:
     """Return the app-level singleton container stored during lifespan startup."""

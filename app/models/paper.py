@@ -9,8 +9,8 @@ class Paper(Base):
     __tablename__ = "papers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    external_id: Mapped[int] = mapped_column(
-        Integer, unique=True, nullable=False, index=True
+    external_id: Mapped[str] = mapped_column(
+        String, unique=True, nullable=False, index=True
     )
 
     title: Mapped[str] = mapped_column(String, nullable=False)

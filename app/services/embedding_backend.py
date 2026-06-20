@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import time
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
@@ -8,7 +9,7 @@ from light_embed import TextEmbedding  # pyright: ignore[reportMissingTypeStubs]
 
 from ..core.config import settings
 from .llm_service import GeminiLLMService
-from ..utils.download_model import ensure_model
+from ..utils.download_model import get_model
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class LocalEmbeddingBackend:
         if self._model is not None:
             return self._model
 
-        ensure_model()
+        get_model()
 
         model_config: dict[str, Any] = {
             "onnx_file": settings.EMBEDDING_ONNX_FILE,
@@ -98,8 +99,12 @@ class GeminiEmbeddingBackend:
             model=settings.GEMINI_EMBEDDING_MODEL,
             contents=texts,
         )
-        values = [embedding.values for embedding in response.embeddings]
+        values = [embedding.values for embedding in response.embeddings] if response.embeddings else []
         return normalize_embeddings(np.array(values, dtype=np.float32))
 
 
-EmbeddingService = GeminiEmbeddingBackend if settings.EMBEDDING_PROVIDER == 'gemini' else LocalEmbeddingBackend
+EmbeddingService = (
+    GeminiEmbeddingBackend
+    if settings.EMBEDDING_PROVIDER == "gemini"
+    else LocalEmbeddingBackend
+)

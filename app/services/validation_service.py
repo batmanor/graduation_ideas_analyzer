@@ -1,4 +1,6 @@
 import math
+
+from app.utils.processing import build_text
 from ..models.paper import Paper
 from ..schemas import IdeaSubmit, ValidationResponse, SimilarPaperMatch
 from ..services.paper_service import PaperService
@@ -12,12 +14,9 @@ class ValidationService:
         self.vector_store = vector_store
 
     async def validate_idea(self, idea: IdeaSubmit) -> ValidationResponse:
-        text_to_embed = f"{idea.title}. {idea.abstract}. {idea.keywords}"
+        text_to_embed = build_text(title= idea.title, abstract= idea.abstract, keywords= idea.keywords)
 
         distances, indices = await self.vector_store.search(text_to_embed, top_k=5)
-
-        distances = distances.flatten()
-        indices = indices.flatten()
 
         if len(indices) == 0:
             return ValidationResponse(
@@ -26,51 +25,14 @@ class ValidationService:
                 similar_papers=[],
             )
 
-        valid_matches = []
-        for dist, idx in zip(distances, indices):
-            idx = int(idx)
-            # FAISS returns -1 if there are not enough matches
-            if idx == -1:
-                continue
-
-            score = float(dist)
-            # Prevent JSON serialization errors from NumPy/FAISS NaN or Inf returns
-            if math.isnan(score) or math.isinf(score):
-                continue
-
-            valid_matches.append((score, idx))
+        valid_matches = self._filter_valid_matches(distances, indices)
 
         is_novel = not any(
             score >= settings.SIMILARITY_THRESHOLD for score, _ in valid_matches
         )
 
-        external_ids = [idx for _, idx in valid_matches]
-
-        papers_map = {}
-        if external_ids:
-            papers = await self.paper_service.get_papers_by_ids(external_ids)
-            papers_map: dict[int, Paper] = (
-                {p.external_id: p for p in papers} if papers else {}
-            )
-
-        # -------------------------
-        # Build matches (preserve order)
-        # -------------------------
-        matches: list[SimilarPaperMatch] = []
-
-        for score, external_id in valid_matches:
-            paper_model = papers_map.get(external_id)
-            if not paper_model:
-                continue
-
-            if score >= settings.SIMILARITY_THRESHOLD:
-                matches.append(
-                    SimilarPaperMatch(
-                        external_id=external_id,
-                        title=paper_model.title,
-                        similarity_score=score,
-                    )
-                )
+        # Build a fast lookup from int id to Paper
+        matches = await self._build_matches(valid_matches)
 
         message = (
             "Idea appears to be novel!"
@@ -83,3 +45,49 @@ class ValidationService:
             message=message,
             similar_papers=matches,
         )
+
+
+    def _filter_valid_matches(self, distances, indices) -> list[tuple[float, int]]:
+        """Clean FAISS results: cast to native types and discard -1, NaN, Inf."""
+        valid_matches:list[tuple[float, int]] = []
+        for dist, idx in zip(distances, indices):
+            idx = int(idx)
+
+            # FAISS returns -1 if there are not enough matches
+            if idx == -1:
+                continue
+
+            score = float(dist)
+
+            # Prevent JSON serialization errors from NumPy/FAISS NaN or Inf returns
+            if math.isnan(score) or math.isinf(score):
+                continue
+
+            valid_matches.append((score, idx))
+        return valid_matches
+
+ 
+    async def _build_matches(self, valid_matches) -> list[SimilarPaperMatch]:
+        """Fetch paper objects and build a list of SimilarPaperMatch."""
+        if not valid_matches:
+            return []
+        
+        ids = [idx for _, idx in valid_matches]
+        papers = await self.paper_service.get_papers_by_ids(ids)
+        id_to_paper: dict[int, Paper] = {p.id: p for p in papers} if papers else {}
+
+        matches: list[SimilarPaperMatch] = []
+        for score, pid in valid_matches:
+            paper = id_to_paper.get(pid)
+            if paper and score >= settings.SIMILARITY_THRESHOLD:
+                matches.append(
+                    SimilarPaperMatch(
+                        external_id=paper.external_id,
+                        title=paper.title,
+                        abstract=paper.abstract,
+                        similarity_score=score,
+                    )
+                )
+                
+        return matches
+
